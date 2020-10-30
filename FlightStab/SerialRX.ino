@@ -6,8 +6,12 @@
 * see http://paparazzi.github.io/docs/latest/stm32_2subsystems_2radio__control_2spektrum__arch_8c_source.html
 *
 ***************************************************************************************************************/
+#include <Arduino.h>
 
 #if defined(SERIALRX_SPEKTRUM)
+#define SERIAL_FRAME_SIZE	16
+//jrb - added 20140831 Add define for Quiet Time
+#define SERIAL_WAIT_TIME	7000
 int8_t rshift;
 #endif
 
@@ -15,10 +19,30 @@ int8_t rshift;
 // The following value is added to the received pulse count
 // to make the center pulse width = 1500 when the TX output is 1500
 // TODO(noobee): i guess we would need to make this configurable..
-#define SBUS_OFFSET 1009 // 1009 for Futaba X8R, 1003 for Taranis FRSKY X8R, 984 for Orange R800x
+#define SBUS_OFFSET 1005 // 1009 for Futaba R6208SB, 1005 for Taranis FRSKY X8R, 984 for Orange R800x
+
+//jrb - added 20140829 Use defines for SBUS Constants instead of hard coded numbers
+// SBUS unique defines
+#define SBUS_SYNC_BYTE 		0x0F
+#define SBUS_END_BYTE		0x00
+#define SERIAL_FRAME_SIZE	25
+#define SERIAL_WAIT_TIME	5000
 #endif
       
-#if (defined(SERIALRX_SPEKTRUM) || defined(SERIALRX_SBUS))
+#if defined(SERIALRX_SRXL)
+#include <util/crc16.h>
+#define SERIAL_FRAME_SIZE	37		// changed to 37 for 16ch HoTT SUMD		      
+#define MPX_OFFSET 		988
+#define SERIAL_WAIT_TIME	5000  
+#define MPX_SRL_12_CHAN_ID	0xA1
+#define MPX_SRL_12_CHAN_SIZE	27
+#define MPX_SRL_16_CHAN_ID	0xA2
+#define MPX_SRL_16_CHAN_SIZE	35
+#define HOTT_SUMD_ID1		0xA8
+#define HOTT_SUMD_ID2		0x01	  
+#endif
+	  
+#if (defined(SERIALRX_SPEKTRUM) || defined(SERIALRX_SBUS) || defined(SERIALRX_SRXL))
   #if defined(NANOWII)
     HardwareSerial *pSerial = &Serial1; // TODO: hardcoded for NanoWii for now
   #else
@@ -26,7 +50,7 @@ int8_t rshift;
   #endif // NANOWI
   
   //jrb add for debug  
-  #if defined(SERIAL_DEBUG) && 1
+  #if defined(SERIALRX_DEBUG) && 1
     volatile int8_t RXcount;
     int8_t PrintIndex;
     uint16_t work;
@@ -41,46 +65,70 @@ int8_t rshift;
     #endif
     #if defined (SERIALRX_SBUS)
       pSerial->begin(100000L, SERIAL_8E2);
+      #if defined (FLIP_SERIALRX_DEBUG)
+        pinMode(4,OUTPUT);
+        pinMode(5,OUTPUT);
+        pinMode(6,OUTPUT);
+        digitalWrite(4,HIGH);		// D4 provides negative pulse that windows the serial receive frame
+        digitalWrite(5,HIGH);		// D5 provides negative pulse when last byte of SBUS frame != 0x00
+        digitalWrite(5,HIGH);		// D6 provides negative pulse when serialrx_update function is active
+      #endif
     #endif
+	#if defined(SERIALRX_SRXL)
+	  pSerial->begin(115200L);
+	#endif
   }
 
   bool serialrx_update()
   {
-    static uint8_t buf[25];
     static int8_t index = 0;
     #if defined (SERIALRX_SBUS)
       bool sbus_return = false;
     #endif // SERIALRX_SBUS  
     
-  #if defined (SERIALRX_SPEKTRUM) 	// Used only for Spektrum    
+  //jrb 20140831 use for all Serial Protocols  
     static uint32_t last_rx_time;
     uint32_t t;
-  #endif  
+    static uint8_t buf[SERIAL_FRAME_SIZE];
+  
+  #if defined(SERIALRX_SRXL)
+    bool sbus_return = false;
+  #endif
 
   //jrb add for debug
-  #if defined(SERIAL_DEBUG) && 0
+  #if defined(SERIALRX_DEBUG) && 0
     Serial.println("Serial update");
   #endif
   
-  while (pSerial->available()) {
+  #if defined (FLIP_SERIALRX_DEBUG)
+    digitalWrite(5,HIGH);
+    digitalWrite(6,LOW);
+  #endif 
+  
+  //jrb - added 20140829 Limit "while loop" to not exceed buffer size   
+    while (pSerial->available() && index<SERIAL_FRAME_SIZE) {
     uint8_t ch = pSerial->read();
 
+//jrb - 20140832 make frame time test common to all Serial Protocols
+    t = micros1();
+    // we assume loop() calls to serialrx_update() in << SERIAL_WAIT_TIME intervals
+    if ((int32_t)(t - last_rx_time) > SERIAL_WAIT_TIME) {
+      index = 0; // found pause before new frame, resync
+    #if defined (FLIP_SERIALRX_DEBUG)
+      digitalWrite(4,HIGH);
+    #endif      
+    }
+    last_rx_time = t;
+      
   #if defined (SERIALRX_SPEKTRUM)    
     #warning SERIALRX_SPEKTRUM defined // emit device name 
   //jrb add for debug    
-      #if defined(SERIAL_DEBUG) && 0
+      #if defined(SERIALRX_DEBUG) && 0
         Serial.println("Serial Spektrum");
       #endif
 
-      t = micros1();
-      // we assume loop() calls to serialrx_update() in << 7ms intervals
-      if ((int32_t)(t - last_rx_time) > 7000) {
-        index = 0; // found pause before new frame, resync
-      }
-      last_rx_time = t;
       buf[index++] = ch;
-    
-      if (index >= 15) {
+      if (index >= SERIAL_FRAME_SIZE) {
 
 /*jrb        
 //  Satellites alone never return frame size information in buf[1] the best I can tell
@@ -106,7 +154,7 @@ jrb*/
         index = 0;
 
   //jrb add for debug       
-  #if defined(SERIAL_DEBUG) && 0   
+  #if defined(SERIALRX_DEBUG) && 0   
       if (RXcount > 100)
       {
         Serial.print("rshift = ");
@@ -141,23 +189,113 @@ jrb*/
   }  
   #endif // SERIALRX_SPEKTRUM
 
+  #if defined(SERIALRX_SRXL) // ----------------------------------------------
+    #warning SERIALRX_SRXL defined // emit device name 
+	  
+      if (index < SERIAL_FRAME_SIZE)	//JRB Should this be just < so we don't overflow buffer????? YES!!!
+        buf[index++] = ch;
+      // MPX SRXL 12/16 channels	  
+      if ( ((buf[0] == MPX_SRL_12_CHAN_ID) && (index >= MPX_SRL_12_CHAN_SIZE)) 
+      	 || ((buf[0] == MPX_SRL_16_CHAN_ID) && (index >= MPX_SRL_16_CHAN_SIZE)) )
+      {
+		uint16_t crc = 0;
+		for (uint8_t i=0; i<index; i++){
+			uint8_t data;
+			data = buf[i];
+			crc = _crc_xmodem_update(crc, data);
+		}
+		if (crc == 0){
+			volatile int16_t **p = rx_chan;
+			// Only process first 8 channels
+			for (int8_t i=2; i<18; i+=2) 
+			{
+			  uint16_t w = (((uint16_t)buf[i-1] << 8) | (uint16_t)buf[i] ) & 0xfff;
+			  *p[(i>>1)-1] = ((((w << 1) + w) - (w >> 2)) >> 3) + 796;
+			}
+			sbus_return = true;
+		}
+        index = 0;
+        
+        #if defined(SERIAL_DEBUG) && 2
+	      //Serial.println("Serial SRXL");
+	      #endif
+      }
+      // HoTT SUMD
+      else if ( ((buf[0] == HOTT_SUMD_ID1) && ((buf[1] & 0x7f) == HOTT_SUMD_ID2) ) )
+      {
+        uint8_t n_channels = buf[2];
+        if (index >= ((n_channels << 1) +5))
+        {
+			uint16_t crc = 0;
+			for (uint8_t i=0; i<(index-2); i++){
+				uint8_t data;
+				data = buf[i];
+				crc = _crc_xmodem_update(crc, data);
+			}
+			if (crc == ((buf[index-2] << 8) + buf[index-1])){
+			   volatile int16_t **p = rx_chan;
+			   // Only process first 8 channels
+			   for (int8_t i=2; i<18; i+=2) 
+			   {
+				 uint16_t w = (((uint16_t)buf[i+1] << 8) | (uint16_t)buf[i+2] );
+				 *p[(i>>1)-1] = (w >> 3);
+			   }
+				sbus_return = true;
+			}
+			index = 0;
+        #if defined(SERIAL_DEBUG) && 2
+	      //Serial.println("Serial SUMD");
+	      #endif
+        } 
+      }
+    //his add for debug  
+    #if defined(SERIAL_DEBUG) && 2   
+      if (RXcount > 10){
+        for (index = 0; index < 8; index++){
+          Serial.print(*rx_chan[index]); Serial.print(' ');
+        }
+        Serial.println(' '); 
+        RXcount = 0; 
+      }
+      if (sbus_return)
+        RXcount++; 
+    #endif
+  }  
+	if (index >= SERIAL_FRAME_SIZE)	// his  bugfix 20170817
+		index = 0;
+  return (sbus_return); 
+  #endif // SERIALRX_SRXL -------------------------------------------------------
 
 
   #if defined (SERIALRX_SBUS)
     #warning SERIALRX_SBUS defined // emit device name 
     //jrb add for debug    
-      #if defined(SERIAL_DEBUG) && 0
+      #if defined(SERIALRX_DEBUG) && 0
         Serial.println("Serial S.BUS");
       #endif
       
-      if (index == 0 && ch != 0x0f) { // SBUS_SYNCBYTE
+      if (index == 0 && ch != SBUS_SYNC_BYTE) { 
         break;
       }
+      #if defined (FLIP_SERIALRX_DEBUG)
+        if (index == 0)
+        {	
+          digitalWrite(4,LOW);
+        }  
+      #endif
       buf[index++] = ch;
-      if (index >= 25) {
+      if (index >= SERIAL_FRAME_SIZE) {
         volatile int16_t **p = rx_chan;
         uint8_t adj_index;
-        
+        //jrb - added 20140829 to detect and discard invalid frames
+        if (buf[24] != SBUS_END_BYTE) { // There is a sync problem - discard this frame and try again
+          index = 0;
+          sbus_return = false;
+      #if defined (FLIP_SERIALRX_DEBUG)
+        digitalWrite(5,LOW);
+      #endif          
+  	} 	
+         	
         // Only process first 8 channels
         *p[0] = (((((uint16_t)buf[1]  >> 0) | ((uint16_t)buf[2]  << 8)) & 0x7ff) >> 1) + SBUS_OFFSET;
         *p[1] = (((((uint16_t)buf[2]  >> 3) | ((uint16_t)buf[3]  << 5)) & 0x7ff) >> 1) + SBUS_OFFSET; 
@@ -172,17 +310,20 @@ jrb*/
        // Adjust the actual value by +/-25%.  Sign determined by pulse width above or below center of 1520us 
        for(adj_index=0; adj_index<rx_chan_size; adj_index++)
        {
-       	if (*p[adj_index] < 1520)
-       	  *p[adj_index] -= (1520 - *p[adj_index]) >> 2;		
+        if (*p[adj_index] < RX_WIDTH_MID)
+       	  *p[adj_index] -= (RX_WIDTH_MID - *p[adj_index]) >> 2;		
        	else	
-       	  *p[adj_index] += (*p[adj_index] - 1520) >> 2;
+       	  *p[adj_index] += (*p[adj_index] - RX_WIDTH_MID) >> 2;
        }	 
         index = 0;
         sbus_return = true;
+      #if defined (FLIP_SERIALRX_DEBUG)
+        digitalWrite(4,HIGH);
+      #endif
       }
 
   //jrb add for debug  
-    #if defined(SERIAL_DEBUG) && 1   
+    #if defined(SERIALRX_DEBUG) && 1   
       if (RXcount > 100)
       {
         for (index = 0; index < 8; index++)
@@ -195,6 +336,10 @@ jrb*/
       RXcount++; 
     #endif
   }
+#if defined (FLIP_SERIALRX_DEBUG)
+    digitalWrite(6,HIGH);
+  #endif 
+    
   return (sbus_return); 
   #endif // SERIALRX_SBUS
 }

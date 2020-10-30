@@ -2,11 +2,11 @@
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectVersion>6.0</ProjectVersion>
+    <ProjectVersion>7.0</ProjectVersion>
     <ToolchainName>com.Atmel.AVRAssembler</ToolchainName>
     <ProjectGuid>52202416-41a7-4c61-892b-f36132641d3c</ProjectGuid>
     <avrdeviceseries>none</avrdeviceseries>
-    <avrdevice>ATmega168PA</avrdevice>
+    <avrdevice>ATmega328P</avrdevice>
     <OutputFileName>AVRootloader</OutputFileName>
     <OutputFileExtension>.obj</OutputFileExtension>
     <OutputDirectory>$(MSBuildProjectDirectory)\$(Configuration)</OutputDirectory>
@@ -16,18 +16,45 @@
     <avrtool />
     <KeepTimersRunning>true</KeepTimersRunning>
     <OverrideVtor>false</OverrideVtor>
-    <OverrideVtorValue />
+    <OverrideVtorValue>exception_table</OverrideVtorValue>
     <eraseonlaunchrule>0</eraseonlaunchrule>
     <EntryFile>$(MSBuildProjectDirectory)\AVRootloader.asm</EntryFile>
     <AsfVersion>3.5.0</AsfVersion>
+    <CacheFlash>true</CacheFlash>
+    <ProgFlashFromRam>true</ProgFlashFromRam>
+    <RamSnippetAddress>0x20000000</RamSnippetAddress>
+    <UncachedRange />
+    <preserveEEPROM>true</preserveEEPROM>
+    <BootSegment>2</BootSegment>
+    <ResetRule>0</ResetRule>
+    <EraseKey />
+    <AsfFrameworkConfig>
+      <framework-data>
+        <options />
+        <configurations />
+        <files />
+        <documentation help="" />
+        <offline-documentation help="" />
+        <dependencies>
+          <content-extension eid="atmel.asf" uuidref="Atmel.ASF" version="3.39.0" />
+        </dependencies>
+      </framework-data>
+    </AsfFrameworkConfig>
+    <avrtoolinterface />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'default' ">
     <OutputPath>bin\default\</OutputPath>
     <ToolchainSettings>
       <AvrAssembler>
+  <avrasm.assembler.general.GenerateMAPFile>False</avrasm.assembler.general.GenerateMAPFile>
+  <avrasm.assembler.general.GenerateLSSFile>False</avrasm.assembler.general.GenerateLSSFile>
   <avrasm.assembler.general.WrapRelativeJumps>True</avrasm.assembler.general.WrapRelativeJumps>
-  <avrasm.assembler.general.UnsupportedInstructions>Error</avrasm.assembler.general.UnsupportedInstructions>
-  <avrasm.assembler.general.IncludeFile>($IncludeFile)</avrasm.assembler.general.IncludeFile>
+  <avrasm.assembler.general.AdditionalIncludeDirectories>
+    <ListValues>
+      <Value>%24(PackRepoDir)\Atmel\ATmega_DFP\1.4.351\avrasm\inc</Value>
+    </ListValues>
+  </avrasm.assembler.general.AdditionalIncludeDirectories>
+  <avrasm.assembler.general.IncludeFile />
 </AvrAssembler>
     </ToolchainSettings>
   </PropertyGroup>

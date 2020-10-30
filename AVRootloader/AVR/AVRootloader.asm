@@ -1,5 +1,7 @@
 ; copyright HR
 
+#define RX3S_328P
+
 .nolist
 
 #if defined(AQUASTAR) || defined(DLUX)
@@ -32,6 +34,14 @@
 .equ	RX					= PC0
 .equ	TX_PORT			= PORTC		; Transmit port and pin
 .equ	TX					= PC0
+#endif
+
+#if defined(RX3S_328P)
+.include "m328Pdef.inc"		; ATmega328P
+.equ	RX_PORT			= PORTD		; Receive port and pin
+.equ	RX					= PD7
+.equ	TX_PORT			= PORTD		; Transmit port and pin
+.equ	TX					= PD7
 #endif
 
 ; supported devices

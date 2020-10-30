@@ -108,11 +108,13 @@ prog_char wing_rudele_2ail[] PROGMEM = "RudEle 2-Ail";
 prog_char wing_delta_2ail[] PROGMEM = "Delta 2-Ail";
 prog_char wing_vtail_2ail[] PROGMEM = "VTail 2-Ail";
 prog_char wing_duckeron[] PROGMEM = "Duckeron";
+prog_char wing_rud_2ele_2ail[] PROGMEM = "Rud 2-Ele 2-AIL";
 
 prog_char mixer_epa_mode[] PROGMEM = "EPA MODE";
 prog_char mixer_epa_full[] PROGMEM = "Full 1000-2000";
 prog_char mixer_epa_norm[] PROGMEM = "Norm 1100-1900";
 prog_char mixer_epa_track[] PROGMEM = "Tracking";
+prog_char mixer_epa_max[] PROGMEM = "Max 900-2100";
 
 prog_char servo_frame_rate[] PROGMEM = "SERVO FRAME RATE";
 
@@ -126,6 +128,8 @@ prog_char mount_orient[] PROGMEM = "MOUNT ORIENT";
 prog_char mount_normal[] PROGMEM = "Normal";
 prog_char mount_roll90left[] PROGMEM = "Roll 90" XSTR(CHAR_DEGREE) " Left";
 prog_char mount_roll90right[] PROGMEM = "Roll 90" XSTR(CHAR_DEGREE) " Right";
+prog_char mount_rotate90left[] PROGMEM = "Rotate 90" XSTR(CHAR_DEGREE) " Left";
+prog_char mount_rotate90right[] PROGMEM = "Rotate 90" XSTR(CHAR_DEGREE) " Right";
 
 prog_char stick_gain_throw[] PROGMEM = "STK-GAIN THROW";
 prog_char stick_gain_throw_full[] PROGMEM = "Full";
@@ -152,15 +156,24 @@ prog_char pid_roll[] PROGMEM = "Ail ";
 prog_char pid_pitch[] PROGMEM = "Ele ";
 prog_char pid_yaw[] PROGMEM = "Rud ";
 
+prog_char dlpf[] PROGMEM = "LOW PASS FILTER";
+prog_char bw_0[] PROGMEM = "256HZ ";
+prog_char bw_1[] PROGMEM = "188HZ ";
+prog_char bw_2[] PROGMEM = "98HZ ";
+prog_char bw_3[] PROGMEM = "42HZ ";
+prog_char bw_4[] PROGMEM = "20HZ ";
+prog_char bw_5[] PROGMEM = "10HZ ";
+prog_char bw_6[] PROGMEM = "5HZ ";
+
 prog_char *param_text0[] PROGMEM = 
 {status, 
   status_device_id, status_device_ver, status_device_eeprom};
    
 prog_char *param_text1[] PROGMEM = {wing_mode, 
-  wing_use_dipsw, wing_rudele_1ail, wing_delta_1ail, wing_vtail_1ail, wing_rudele_2ail, wing_delta_2ail, wing_vtail_2ail, wing_duckeron};
+  wing_use_dipsw, wing_rudele_1ail, wing_delta_1ail, wing_vtail_1ail, wing_rudele_2ail, wing_delta_2ail, wing_vtail_2ail, wing_duckeron, wing_rud_2ele_2ail};
 
 prog_char *param_text2[] PROGMEM = {mixer_epa_mode, 
-  mixer_epa_full, mixer_epa_norm, mixer_epa_track};
+  mixer_epa_full, mixer_epa_norm, mixer_epa_track, mixer_epa_max};
   
 prog_char *param_text3[] PROGMEM = {servo_frame_rate, 
    };
@@ -172,7 +185,7 @@ prog_char *param_text5[] PROGMEM = {serialrx_spektrum_levels,
   serialrx_spektrum_levels_1024, serialrx_spektrum_levels_2048};
   
 prog_char *param_text6[] PROGMEM = {mount_orient, 
-  mount_normal, mount_roll90left, mount_roll90right};
+  mount_normal, mount_roll90left, mount_roll90right, mount_rotate90left, mount_rotate90right};
   
 prog_char *param_text7[] PROGMEM = {stick_gain_throw, 
   stick_gain_throw_full, stick_gain_throw_half, stick_gain_throw_quarter};
@@ -194,8 +207,11 @@ prog_char *param_text12[] PROGMEM = {pid_rate,
 
 prog_char *param_text13[] PROGMEM = {pid_hold,
   pid_roll, pid_pitch, pid_yaw};
+
+prog_char *param_text14[] PROGMEM = {dlpf,
+  bw_0, bw_1, bw_2, bw_3, bw_4, bw_5, bw_6};
    
-prog_char *param_text14[] PROGMEM = {eeprom, 
+prog_char *param_text15[] PROGMEM = {eeprom, 
   eeprom_instr, eeprom_update_cfg, eeprom_erase_cfg, eeprom_erase_stats};
 
 prog_char **param_textB[] = {
@@ -213,7 +229,8 @@ prog_char **param_textB[] = {
   param_text11,
   param_text12,
   param_text13,
-  param_text14
+  param_text14,
+  param_text15
 };
   
 #define PARAM_TEXT(i, j) (const __FlashStringHelper*) pgm_read_word(&((param_textB[i])[j]))
@@ -260,6 +277,7 @@ int8_t * const param_pval[] = {
   &cfg.vr_gain[0],
   (int8_t*) &pid_param_array_rate,
   (int8_t*) &pid_param_array_hold,
+  (int8_t*) &cfg.gyro_dlpf,
   &param_val_eeprom,
 };
   
@@ -278,6 +296,7 @@ enum PARAM_TYPE param_type[] = {
   PARAM_VR_GAIN,
   PARAM_PID,
   PARAM_PID,
+  PARAM_ENUM,
   PARAM_EEPROM,
 };
 
@@ -296,17 +315,18 @@ const int16_t param_min[] = {
   -128, // vr_gain
   0, // pid_rate
   0, // pid_hold
+  BW_256HZ, // Bandwidth Max
   1 // eeprom
 };
 
 const int16_t param_max[] = {
   3, // status
-  WING_DUCKERON, 
-  MIXER_EPA_TRACK,  
+  WING_RUD_2ELE_2AIL, 
+  MIXER_EPA_MAX,  
   20, // servo_frame_rate
   serialrx_num_chan-1, // serialrx_order max chan
   SERIALRX_SPEKTRUM_LEVELS_2048,
-  MOUNT_ROLL_90_RIGHT,    
+  MOUNT_ROTATE_90_RIGHT,    
   STICK_GAIN_THROW_QUARTER,
   MAX_ROTATE_HIGH,
   RATE_MODE_STICK_ROTATE_ENABLE,
@@ -314,6 +334,7 @@ const int16_t param_max[] = {
   127, // vr_gain
   1000, // pid_rate
   1000, // pid_hold
+  BW_5HZ, // Bandwidth Min
   4 // eeprom
 };
   

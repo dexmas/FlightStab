@@ -121,15 +121,13 @@ Numberbox addPIDBox(String name, int x, int y, int spacing) {
 void serialPortInit(int index) {
   println("serialPortInit " + index);
   serialPortIndex = index;
-  for (int i=0; i<comList.getListBoxItems().length; i++)
-    comList.getItem(i).setColorBackground(0);
-  comList.getItem(index).setColorBackground(color(0,128,0));
 }
 
 void id_cmdConnect(int val){
   println("id_cmdConnect handler" + val);
   if (serialPort == null) {
     serialPort = new Serial(this, Serial.list()[serialPortIndex], 115200);
+    println("Serial #" + serialPortIndex + " created. Serial = " + serialPort);
   }
 }
 
@@ -145,9 +143,22 @@ void id_cmdDefault(int val) {
     sendGetGyro();
 }
 
-/***************************************************************************************************************
-* 
-***************************************************************************************************************/
+void id_cmdWrite(int val){
+  println("id_cmdWrite handler" + val);
+  if (serialPort != null) {
+    for(int i=0; i < 666; i++) {
+      serialPort.write(666);
+    }
+  }
+}
+
+void id_cmdRead(int val){
+  println("id_cmdRead handler" + val);
+  while (serialPort != null && serialPort.available() > 0) {
+    int sbyte = serialPort.read();
+    println(sbyte);
+  }
+}
 
 void setup() {
 //  size(800, 600, OPENGL);
@@ -158,7 +169,7 @@ void setup() {
   smooth();
 
   cp5 = new ControlP5(this); // initialize the GUI controls
-  cp5.setControlFont(createFont("Arial bold",15,false));
+  //cp5.setFont(createFont("Arial bold",15,false));
 
   int x, y;
   int dy = 20;
@@ -178,6 +189,7 @@ void setup() {
     comList.addItem(Serial.list()[i], i);
   }
   if (Serial.list().length == 1) {
+	comList.getItem(0).put( "state" , true );
     serialPortInit(0);
   }
 
@@ -224,11 +236,6 @@ void setup() {
   stkRate = addCfgSlider("Rate", x, y += dy, 0, 1023);
   oscThres = addCfgSlider("Thres", x, y += dy, 0, 1023);
 
-
-
-
-
-     
   x = 375; y = 20;    
   addTextLabel("RX", x, y, color(255, 255, 0));
   rxAil = addRxSlider("Ail", x, y += dy);
@@ -269,12 +276,6 @@ void setup() {
   
 }
 
-/***************************************************************************************************************
-* 
-***************************************************************************************************************/
-
-
-
 class cData {
   float[] value;
   int first, last, count, maxSize;
@@ -307,10 +308,7 @@ class cData {
   }
 }
 
-
-
 int graphX = 100, graphY = 400, graphWidth = 600, graphHeight = 200;
-
 
 void drawGraph(cData g, color c) {
   float y, y0=0, x;
@@ -326,8 +324,6 @@ void drawGraph(cData g, color c) {
   }
 }
 
-
-
 void drawGraphs() {
   fill(0);
   stroke(0);
@@ -339,14 +335,7 @@ void drawGraphs() {
 
 }
 
-
 void draw() {
-  //println("Draw");
-//  fill(123 % 100);
-//  rect(0,0,500,500);
-//  nb.setValue(nb.getValue()+1);
-//  rxAil.setValue(rxAil.getValue()+1).show();
-
   drawGraphs();
 }
 
@@ -360,19 +349,14 @@ void keyPressed() {
 }
 
 void controlEvent(ControlEvent theEvent) {
-  println("controlEvent " + theEvent.name());
-  if (theEvent.name() == "id_swCheckbox")
+  println("controlEvent " + theEvent.getName());
+  if (theEvent.getName() == "id_swCheckbox")
     println(swCheckbox.getState(0));  
 
-  if (theEvent.isGroup() && theEvent.name() == "id_serial")
-    serialPortInit((int)theEvent.group().value());
+  if (theEvent.getName() == "id_serial")
+    serialPortInit((int)theEvent.getValue());
     
 }
-
-
-/***************************************************************************************************************
-* 
-***************************************************************************************************************/
 
 void serialSendBuf(byte[] buf, int len)
 {
@@ -395,16 +379,8 @@ void serialSendBuf(byte[] buf, int len)
     serialPort.write(buf[i]);
   serialPort.write((byte)checksum);
     
-  /*
-  print("$ " + hex((byte)(len+1)) + " ");
-  for (i=0; i<len; i++)
-    print(hex(buf[i]) + " ");
-  println(hex(checksum));
-  */
-  
   serialRequest++;
 }
-
 
 void put8(int v)
 {
@@ -423,7 +399,6 @@ void put32(int v)
   put16((v >> 16) & 0xffff);
 }
 
-
 int get_unsigned8()
 {
   return serialRxBuf[serialRxi++] & 0xff;
@@ -440,12 +415,13 @@ int get_signed32() {
      (serialRxBuf[serialRxi++] << 24);
 }
 
-
 void handleResponse()
 {
-  println("handleResponse");
-  serialRxi = 0;
-  switch (get_unsigned8()) {
+  int len = serialRxi; serialRxi = 0;
+  int msg = get_unsigned8();
+  println("handleResponse. msg: " + msg + ", len: " + len);
+  
+  switch (msg) {
   case 101:
     int gRoll = get_signed16();  
     int gPitch = get_signed16();  
@@ -457,7 +433,6 @@ void handleResponse()
     break;
   }
   
-
   // decide next request message  
   sendGetGyro();
 }
@@ -466,7 +441,7 @@ void serialEvent(Serial serialPort)
 {
   while (serialPort.available() > 0) { 
     byte ch = (byte) serialPort.read();
-    //println(hex(ch));
+  	println("serialEvent. Received: " + ch);
     switch(serialRxState) {
     case IDLE_STATE:
       if (ch == (byte)'$') 
@@ -505,8 +480,6 @@ void serialEvent(Serial serialPort)
 
 void sendGetGyro() {
   serialTxi = 0;
-  put8(100); 
+  put8(3); 
   serialSendBuf(serialTxBuf, serialTxi);
 }
-
-
